@@ -1,3 +1,6 @@
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import requests
 import json
 import re
@@ -5,6 +8,22 @@ from bs4 import BeautifulSoup
 from colorthief import ColorThief
 from io import BytesIO
 from urllib.parse import urljoin, urlparse
+
+# Initialize the FastAPI app (Render looks for this variable)
+app = FastAPI(title="Brand Scraper API")
+
+# Configure CORS so your frontend can communicate with it safely
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Define the expected JSON payload
+class BrandRequest(BaseModel):
+    targetUrl: str
 
 def extract_brand_info(target_url: str):
     # --- 1. ROBUST URL HANDLING ---
@@ -129,15 +148,10 @@ def extract_brand_info(target_url: str):
     except Exception as e:
         return {"error": str(e)}
 
-# --- TESTING BLOCK ---
-if __name__ == "__main__":
-    # Passing deep links to test the main URL extraction
-    test_urls = ["https://github.com/features/actions", "https://santatracker.google.com/"]
-    
-    print("🚀 Starting Smarter Scraper Test...\n")
-    
-    for url in test_urls:
-        print(f"📡 Target: {url}")
-        result = extract_brand_info(url)
-        print(json.dumps(result, indent=2, ensure_ascii=False))
-        print("-" * 50)
+# Create the live API endpoint
+@app.post("/api/organization/extract-brand")
+async def extract_brand(request: BrandRequest):
+    result = extract_brand_info(request.targetUrl)
+    if "error" in result:
+        raise HTTPException(status_code=500, detail=result["error"])
+    return result
